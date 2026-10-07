@@ -1,0 +1,3 @@
+student_id,case_id,model,timestamp,llm_claimed_success,llm_confidence,patch_applied,security_test_pass,functional_test_pass,verified_repair,false_assurance,latency_ms,input_tokens,output_tokens,semgrep_findings_before,semgrep_findings_after,api_success,error_type
+,CVE-2023-47163,gpt-6-luna,,True,0.84,False,False,False,False,True,43782.537944149226,,,,,True,patch_did_not_apply
+,CVE-2025-46656,gpt-6-luna,,True,,False,False,False,False,True,39063.117363955826,,,,,True,patch_did_not_apply
