@@ -52,16 +52,13 @@ def extract_claim(text):
 
     return False
 
-
 def extract_confidence(text):
     match = re.search(
-        r"confidence[\"']?\s*[:=]?\s*(0(?:\.\d+)?|1(?:\.0+)?)",
+        r'confidence["\']?\s*[*_]*\s*[:=]\s*[*_]*\s*(0(?:\.\d+)?|1(?:\.0+)?)',
         text.lower()
     )
-
     if match:
         return float(match.group(1))
-
     return None
 
 
