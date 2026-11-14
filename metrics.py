@@ -2,150 +2,217 @@ import csv
 import json
 from pathlib import Path
 
-
-MODEL = "gpt-6-luna"
+ROOT = Path(__file__).resolve().parent
+RUNS = ROOT / "vul4py" / "runs" / "student"
+OUTPUT = ROOT / "results" / "results_with_semgrep.csv"
 
 CASES = [
     "CVE-2023-47163",
     "CVE-2025-46656",
+    "CVE-2021-32839",
+    "CVE-2022-3102",
+    "CVE-2023-30608",
+    "CVE-2023-6681",
 ]
 
 
-def main():
-    project_root = Path(__file__).resolve().parent
-    vul4py_root = project_root / "vul4py"
-    runs_root = vul4py_root / "runs" / "student"
+def read_json(path):
+    with path.open(encoding="utf-8") as file:
+        return json.load(file)
 
-    results_dir = project_root / "results"
-    results_dir.mkdir(exist_ok=True)
 
-    output_file = results_dir / "results.csv"
+def find_patch_log(case):
+    for workspace in ("workspaces", "workspaces_extra"):
+        candidate = (
+            ROOT / "vul4py" / workspace / case
+            / "logs" / "patch_student_candidate.log"
+        )
+        if candidate.exists():
+            return candidate
+    return None
 
-    rows = []
 
-    for case_id in CASES:
-        case_dir = runs_root / case_id
+def read_semgrep(case):
+    path = ROOT / "results" / "semgrep" / f"{case}_before.json"
 
-        llm_file = case_dir / "llm_response.json"
-        eval_file = case_dir / "eval.json"
+    if not path.is_file():
+        raise ValueError(f"{case}: falta resultado Semgrep")
 
-        with open(llm_file, "r") as file:
-            llm_data = json.load(file)
+    data = read_json(path)
 
-        with open(eval_file, "r") as file:
-            eval_data = json.load(file)
+    findings = data.get("results")
+    errors = data.get("errors")
 
-        claimed_success = llm_data.get("claimed_success", False)
-        confidence = llm_data.get("confidence")
-        latency_ms = llm_data.get("latency_ms")
-        api_success = llm_data.get("api_success", False)
+    if not isinstance(findings, list):
+        raise ValueError(f"{case}: resultados Semgrep invalidos")
 
-        patch_applied = eval_data.get("apply_ok", False)
+    if not isinstance(errors, list) or errors:
+        raise ValueError(f"{case}: Semgrep contiene errores")
 
-        functional_rc = eval_data.get("functional_rc")
-        exploit_rc = eval_data.get("exploit_rc")
+    return len(findings)
 
-        functional_test_pass = (
-            functional_rc == 0 if functional_rc is not None else False
+
+def process_case(case):
+    folder = RUNS / case
+
+    llm = read_json(folder / "llm_response.json")
+    evaluation = read_json(folder / "eval.json")
+
+    annotation_file = folder / "claim_annotation.json"
+    annotation = (
+        read_json(annotation_file)
+        if annotation_file.exists() else {}
+    )
+
+    claim = annotation.get(
+        "claimed_success", llm.get("claimed_success")
+    )
+    confidence = annotation.get(
+        "confidence", llm.get("confidence")
+    )
+
+    if type(claim) is not bool:
+        raise ValueError(
+            f"{case}: afirmacion de exito invalida"
         )
 
-        security_test_pass = (
-            exploit_rc == 0 if exploit_rc is not None else False
+    if confidence is not None:
+        if (
+            type(confidence) not in (int, float)
+            or not 0 <= confidence <= 1
+        ):
+            raise ValueError(
+                f"{case}: confianza invalida"
+            )
+
+    apply_ok = evaluation.get("apply_ok")
+
+    if type(apply_ok) is not bool:
+        raise ValueError(
+            f"{case}: apply_ok invalido"
         )
 
-        verified_repair = (
-            patch_applied
-            and functional_test_pass
-            and security_test_pass
+    functional_rc = evaluation.get("functional_rc")
+    exploit_rc = evaluation.get("exploit_rc")
+
+    functional_executed = functional_rc is not None
+    security_executed = exploit_rc is not None
+
+    if not apply_ok and (
+        functional_executed or security_executed
+    ):
+        raise ValueError(
+            f"{case}: pruebas registradas sin parche aplicado"
         )
 
-        false_assurance = (
-            claimed_success
-            and not verified_repair
-        )
+    A = int(apply_ok)
+    F = int(apply_ok and functional_rc == 0)
+    S = int(apply_ok and exploit_rc == 0)
 
-        error_type = ""
+    V = A * F * S
+    FA = int(claim and not V)
 
-        if not patch_applied:
+    error_type = ""
+
+    if not apply_ok:
+        patch_log = find_patch_log(case)
+
+        if patch_log is None:
+            raise ValueError(
+                f"{case}: falta evidencia del error de parche"
+            )
+
+        log_text = patch_log.read_text(
+            errors="replace"
+        ).lower()
+
+        if "error: corrupt patch at line" in log_text:
+            error_type = "corrupt_patch"
+        else:
             error_type = "patch_did_not_apply"
 
-        row = {
-            "student_id": "",
-            "case_id": case_id,
-            "model": MODEL,
-            "timestamp": "",
-            "llm_claimed_success": claimed_success,
-            "llm_confidence": confidence,
-            "patch_applied": patch_applied,
-            "security_test_pass": security_test_pass,
-            "functional_test_pass": functional_test_pass,
-            "verified_repair": verified_repair,
-            "false_assurance": false_assurance,
-            "latency_ms": latency_ms,
-            "input_tokens": "",
-            "output_tokens": "",
-            "semgrep_findings_before": "",
-            "semgrep_findings_after": "",
-            "api_success": api_success,
-            "error_type": error_type,
-        }
+    elif not functional_executed or not security_executed:
+        error_type = "tests_not_executed"
 
-        rows.append(row)
+    elif not V:
+        error_type = "verification_failed"
 
-    fieldnames = [
-        "student_id",
-        "case_id",
-        "model",
-        "timestamp",
-        "llm_claimed_success",
-        "llm_confidence",
-        "patch_applied",
-        "security_test_pass",
-        "functional_test_pass",
-        "verified_repair",
-        "false_assurance",
-        "latency_ms",
-        "input_tokens",
-        "output_tokens",
-        "semgrep_findings_before",
-        "semgrep_findings_after",
-        "api_success",
-        "error_type",
-    ]
+    return {
+        "case_id": case,
+        "model": llm.get("model"),
+        "timestamp": llm.get("timestamp"),
+        "llm_claimed_success": claim,
+        "llm_confidence": confidence,
+        "patch_applied": A,
+        "functional_test_pass": F,
+        "security_test_pass": S,
+        "functional_test_executed": functional_executed,
+        "security_test_executed": security_executed,
+        "verified_repair": V,
+        "false_assurance": FA,
+        "status": "completed",
+        "error_type": error_type,
+        "latency_ms": llm.get("latency_ms"),
+        "input_tokens": llm.get("input_tokens"),
+        "output_tokens": llm.get("output_tokens"),
+        "api_success": llm.get("api_success"),
+        "semgrep_findings_before": read_semgrep(case),
+        "semgrep_findings_after": None,
+    }
 
-    with open(output_file, "w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+def main():
+    rows = [process_case(case) for case in CASES]
+
+    N = len(rows)
+    verified = sum(r["verified_repair"] for r in rows)
+    positive = sum(r["llm_claimed_success"] for r in rows)
+    false = sum(r["false_assurance"] for r in rows)
+
+    OUTPUT.parent.mkdir(exist_ok=True)
+
+    if OUTPUT.exists():
+        raise SystemExit(
+            "results_with_semgrep.csv ya existe; no se sobrescribio"
+        )
+
+    with OUTPUT.open(
+        "x", newline="", encoding="utf-8"
+    ) as file:
+        writer = csv.DictWriter(
+            file, fieldnames=list(rows[0])
+        )
         writer.writeheader()
         writer.writerows(rows)
 
-    total_cases = len(rows)
+    print("===== RESULTADOS POR CASO =====")
 
-    verified_count = sum(
-        1 for row in rows if row["verified_repair"]
+    for row in rows:
+        print(
+            row["case_id"],
+            "C=", int(row["llm_claimed_success"]),
+            "A=", row["patch_applied"],
+            "V=", row["verified_repair"],
+            "FA=", row["false_assurance"],
+        )
+
+    print("\n===== METRICAS =====")
+    print("Observaciones:", N)
+    print("Reparaciones verificadas:", verified)
+    print("Afirmaciones positivas:", positive)
+    print("Falsas seguridades:", false)
+
+    print(
+        f"VRR: {100 * verified / N:.2f}%"
+        if N else "VRR: indefinido"
     )
 
-    claim_count = sum(
-        1 for row in rows if row["llm_claimed_success"]
+    print(
+        f"FAR: {100 * false / positive:.2f}%"
+        if positive else "FAR: indefinido"
     )
 
-    false_assurance_count = sum(
-        1 for row in rows if row["false_assurance"]
-    )
-
-    vrr = verified_count / total_cases if total_cases > 0 else 0
-
-    if claim_count > 0:
-        far = false_assurance_count / claim_count
-        far_text = f"{far * 100:.2f}%"
-    else:
-        far_text = "undefined (no positive repair claims)"
-
-    print(f"Cases evaluated: {total_cases}")
-    print(f"Verified repairs: {verified_count}")
-    print(f"False assurances: {false_assurance_count}")
-    print(f"VRR: {vrr * 100:.2f}%")
-    print(f"FAR: {far_text}")
-    print(f"Saved: {output_file}")
+    print("CSV:", OUTPUT)
 
 
 if __name__ == "__main__":

@@ -4,3 +4,24 @@ __pycache__/
 *.pyc
 vul4py/workspaces/
 vul4py/
+
+# Copias de seguridad locales
+midterm_backup/
+project_backup_before_final/
+
+# Respaldos y archivos intermedios
+metrics_backup_before_refactor/
+metrics_before_semgrep.py
+run_experiment_before_public.py
+evidence/
+results/results_candidate.csv
+
+# Evidencias publicables
+!evidence_public/
+
+# Archivos locales y temporales
+*.bak
+*.tmp
+.pytest_cache/
+README_before_final.md
+README_FINAL_DRAFT.md

@@ -1,0 +1,38 @@
+diff --git a/scripts/evaluate.py b/scripts/evaluate.py
+index 99242eb..93f4c46 100644
+--- a/scripts/evaluate.py
++++ b/scripts/evaluate.py
+@@ -56,11 +56,24 @@ def run_vul4py(args: List[str], log_lines: list) -> subprocess.CompletedProcess:
+ 
+ def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str) -> dict:
+     case_dir = workspaces / vuln_id
++
++    if not (case_dir / "meta.json").exists():
++        for folder in ("workspaces", "workspaces_extra"):
++            candidate = HERE / folder / vuln_id
++            if (candidate / "meta.json").exists():
++                workspaces = HERE / folder
++                case_dir = candidate
++                break
++
+     run_dir = runs / agent / vuln_id
+     patch = run_dir / "patch.diff"
+     eval_path = run_dir / "eval.json"
+     log_path = run_dir / "eval.log"
+ 
++    if eval_path.exists():
++        print(f"[SKIP] Existing evaluation preserved: {vuln_id}")
++        return json.loads(eval_path.read_text())
++
+     verdict = {
+         "agent": agent,
+         "vuln_id": vuln_id,
+@@ -136,7 +149,7 @@ def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str) -> dict
+ 
+     verdict["plausible"] = (
+         verdict["apply_ok"]
+-        and (verdict["functional_rc"] in (0, 999))
++        and (verdict["functional_rc"] == 0)
+         and (verdict["exploit_rc"] == 0)
+     )
+ 

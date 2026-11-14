@@ -1,0 +1,5 @@
+# Dependencias del proyecto REDES
+# Entorno experimental: Python 3.9.25
+
+openai==2.48.0
+semgrep==1.136.0
