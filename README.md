@@ -463,3 +463,97 @@ already modified evaluator.
 The historical audit can operate from the public evidence.
 Full isolated execution additionally requires the Vul4Py
 benchmark and prepared workspaces with their dependencies.
+
+
+## 19. Final Benchmark Validation and Modular Contracts
+
+### Benchmark case validation
+
+All six selected Vul4Py cases were confirmed as OK
+in their original scan_report.tsv files.
+
+The consolidated validation evidence is saved in:
+
+    results/vul4py_case_validation.csv
+
+The report includes baseline functional and exploit
+test return codes for vulnerable and fixed versions.
+
+This benchmark validation is separate from evaluating
+the six LLM-generated patches.
+
+### Final CSV
+
+The six-case delivery table is:
+
+    results/results.csv
+
+Additional preserved result tables are:
+
+    results/results_final.csv
+    results/results_with_semgrep.csv
+
+The historical two-case CSV was backed up locally
+before preparing the six-case delivery table.
+
+Missing experimental metadata was not fabricated.
+
+### Modular data contracts
+
+models.py defines:
+
+- VerificationResult
+- LLMResult
+- EvaluationResult
+- AnalyzerResult
+
+The modular interfaces are located in:
+
+    benchmarks/base.py
+    analyzers/base.py
+
+Their implementations are located in:
+
+    benchmarks/vul4py.py
+    analyzers/semgrep.py
+
+The existing historical auditing and isolated
+verification implementations remain available.
+
+### Automated validation
+
+Run:
+
+    python -m unittest discover -s tests -v
+
+The validated test suite contains 33 tests.
+
+The six historical cases can be audited with:
+
+    python run_experiment.py --audit
+
+Expected historical metrics:
+
+- Verified Repair Rate: 0.00%
+- False Assurance Rate: 100.00%
+
+### Scope of modular support
+
+The new adapters satisfy their Python Protocol
+interfaces and have isolated unit tests.
+
+The modular adapter methods have not all been
+demonstrated through a complete live Vul4Py
+evaluation.
+
+The historical controller does not automatically
+switch between arbitrary benchmark or analyzer
+implementations.
+
+These interfaces support future extension; their
+presence alone does not demonstrate fully
+interchangeable end-to-end execution.
+
+The original six LLM-generated patches were rejected
+during application. No new LLM attempts were
+generated as part of these modular improvements.

@@ -1,0 +1,7 @@
+cve_id,status,func_vuln_rc,func_fixed_rc,exploit_vuln_rc,exploit_fixed_rc
+CVE-2023-47163,OK,0,0,1,0
+CVE-2025-46656,OK,0,0,1,0
+CVE-2021-32839,OK,0,0,1,0
+CVE-2022-3102,OK,0,0,1,0
+CVE-2023-30608,OK,0,0,1,0
+CVE-2023-6681,OK,0,0,1,0

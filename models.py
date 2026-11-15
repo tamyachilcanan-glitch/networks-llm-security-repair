@@ -61,3 +61,33 @@ class VerificationResult:
     @property
     def verified_repair(self):
         return self.A * self.F * self.S
+
+
+# Contratos estables de la arquitectura modular REDES.
+from pathlib import Path as _Path
+from typing import Optional as _Optional
+
+
+@dataclass(frozen=True)
+class LLMResult:
+    claimed_success: bool
+    confidence: float
+    patch: str
+    raw_response: str
+    latency_ms: float
+    input_tokens: _Optional[int] = None
+    output_tokens: _Optional[int] = None
+
+
+@dataclass(frozen=True)
+class EvaluationResult:
+    patch_applied: bool
+    security_test_pass: bool
+    functional_test_pass: bool
+    candidate_dir: _Optional[_Path] = None
+
+
+@dataclass(frozen=True)
+class AnalyzerResult:
+    name: str
+    values: dict
