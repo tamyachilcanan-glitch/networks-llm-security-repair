@@ -95,11 +95,50 @@ def main():
         action="store_true",
         help="Auditar los seis experimentos existentes"
     )
+    parser.add_argument(
+        "--verify-isolated",
+        action="store_true"
+    )
+    parser.add_argument("--case")
+    parser.add_argument("--runs-root")
+    parser.add_argument("--workspaces-root")
+
     args = parser.parse_args()
 
-    if not args.audit:
+    if args.audit == args.verify_isolated:
         parser.error(
-            "Utiliza --audit. No se permite regenerar intentos."
+            "Selecciona --audit o --verify-isolated"
+        )
+
+    if args.verify_isolated:
+        if not all((
+            args.case,
+            args.runs_root,
+            args.workspaces_root
+        )):
+            parser.error(
+                "Faltan --case, --runs-root o --workspaces-root"
+            )
+
+        from pipeline import verify_isolated_case
+
+        result = verify_isolated_case(
+            args.case,
+            args.runs_root,
+            args.workspaces_root
+        )
+
+        print(json.dumps(result, indent=2))
+        print("VERIFICACION AISLADA COMPLETADA")
+        return
+
+    if any((
+        args.case,
+        args.runs_root,
+        args.workspaces_root
+    )):
+        parser.error(
+            "Las rutas aisladas requieren --verify-isolated"
         )
 
     evidence_root = config.PROJECT_ROOT / "evidence_public"

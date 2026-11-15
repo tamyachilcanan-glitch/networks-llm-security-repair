@@ -1,13 +1,16 @@
 diff --git a/scripts/evaluate.py b/scripts/evaluate.py
-index 99242eb..93f4c46 100644
+index 99242eb..a43e0bf 100644
 --- a/scripts/evaluate.py
 +++ b/scripts/evaluate.py
-@@ -56,11 +56,24 @@ def run_vul4py(args: List[str], log_lines: list) -> subprocess.CompletedProcess:
+@@ -54,13 +54,26 @@ def run_vul4py(args: List[str], log_lines: list) -> subprocess.CompletedProcess:
+     return cp
  
- def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str) -> dict:
+ 
+-def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str) -> dict:
++def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str, strict_workspaces: bool = False, keep_candidate: bool = False) -> dict:
      case_dir = workspaces / vuln_id
 +
-+    if not (case_dir / "meta.json").exists():
++    if not strict_workspaces and not (case_dir / "meta.json").exists():
 +        for folder in ("workspaces", "workspaces_extra"):
 +            candidate = HERE / folder / vuln_id
 +            if (candidate / "meta.json").exists():
@@ -27,7 +30,7 @@ index 99242eb..93f4c46 100644
      verdict = {
          "agent": agent,
          "vuln_id": vuln_id,
-@@ -136,7 +149,7 @@ def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str) -> dict
+@@ -136,11 +149,12 @@ def evaluate_one(workspaces: Path, runs: Path, agent: str, vuln_id: str) -> dict
  
      verdict["plausible"] = (
          verdict["apply_ok"]
@@ -36,3 +39,30 @@ index 99242eb..93f4c46 100644
          and (verdict["exploit_rc"] == 0)
      )
  
+-    cleanup_candidate(case_dir, dst_name)
++    if not keep_candidate:
++        cleanup_candidate(case_dir, dst_name)
+     log_path.write_text("\n".join(log) + "\n", encoding="utf-8")
+     verdict["elapsed_s"] = round(time.time() - t0, 1)
+     eval_path.write_text(json.dumps(verdict, indent=2), encoding="utf-8")
+@@ -164,7 +178,11 @@ def main():
+     ap.add_argument("--workspaces", type=Path, default=WORKSPACES)
+     ap.add_argument("--runs", type=Path, default=RUNS)
+     ap.add_argument("--limit", type=int, default=None)
++    ap.add_argument("--strict-workspaces", action="store_true")
++    ap.add_argument("--keep-candidate", action="store_true")
+     args = ap.parse_args()
++    if args.keep_candidate and not args.strict_workspaces:
++        ap.error("--keep-candidate requiere --strict-workspaces")
+ 
+     agent_dir = args.runs / args.agent
+     if not agent_dir.exists():
+@@ -179,7 +197,7 @@ def main():
+ 
+     n_plaus = 0
+     for vid in targets:
+-        v = evaluate_one(args.workspaces, args.runs, args.agent, vid)
++        v = evaluate_one(args.workspaces, args.runs, args.agent, vid, args.strict_workspaces, args.keep_candidate)
+         flag = "PLAUSIBLE" if v["plausible"] else "FAIL"
+         print(
+             f"  {args.agent}/{vid}: {flag} "

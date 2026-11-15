@@ -356,7 +356,7 @@ Semgrep analyzed one selected vulnerable Python file per case, not the complete 
 
 The two earliest experiments have less complete API metadata than the four later experiments.
 
-The current modular controller supports historical auditing but does not automate a new end-to-end repair experiment.
+The modular controller supports historical auditing and isolated verification of previously generated patches. It does not automate new LLM repair generation.
 
 Consequently, the observed VRR and FAR must not be generalized beyond the six evaluated observations.
 
@@ -375,3 +375,91 @@ The available API response copies exclude encrypted_content fields.
 These checks reduce publication risk but do not guarantee the absence of all sensitive information.
 
 The historical evidence must not be modified to improve experimental results.
+
+
+## 18. Isolated Verification and Automated Tests
+
+The controller provides two execution modes.
+
+### Historical audit
+
+    python run_experiment.py --audit
+
+This mode reads frozen evidence for the six selected CVEs.
+It does not request new LLM responses or execute new repairs.
+
+### Isolated verification
+
+    python run_experiment.py --verify-isolated \
+        --case CVE-2023-47163 \
+        --runs-root /tmp/redes_runs \
+        --workspaces-root /tmp/redes_workspaces
+
+The isolated mode requires prepared Vul4Py workspace and run
+directories, including the vulnerable project, meta.json, and
+the previously generated patch.diff.
+
+The paths shown above are examples, not prepared installations.
+
+The evaluator uses --strict-workspaces to prevent fallback to
+the original benchmark workspaces.
+
+The --keep-candidate option allows the repaired candidate to
+remain available temporarily for post-repair static analysis.
+
+The pipeline executes Vul4Py, interprets the evaluation,
+reads the saved LLM claim, and loads the historical Semgrep
+baseline results.
+
+When a patch is applied, Semgrep analyzes the temporary
+candidate directory and writes semgrep_after.json to the
+isolated run directory.
+
+The pipeline removes its temporary candidate after analysis.
+Existing candidates are protected against replacement.
+
+No new OpenAI API requests are made in this verification mode.
+
+### Automated tests
+
+Run the complete test suite with:
+
+    python -m unittest discover -s tests -v
+
+The validated suite contains 27 tests covering verification
+logic, adapter behavior, isolated execution, error handling,
+candidate protection, cleanup, and Semgrep integration.
+
+### Verification scope
+
+A real isolated controller execution was tested with an
+intentionally invalid patch. Vul4Py rejected the patch and
+the pipeline correctly identified false assurance.
+
+The post-repair Semgrep path was validated with a simulated
+successful evaluator result and a real Semgrep scan of a
+temporary Python file.
+
+These integration tests do not constitute successful real
+repairs of the six selected CVEs.
+
+All six original patches failed during application.
+Functional and security tests were not executed on repaired
+candidates in the historical experimental sample.
+
+### Reproducing evaluator modifications
+
+The project includes:
+
+    benchmark/evaluate_vul4py.patch
+
+The patch contains evaluator adaptations, strict workspace
+isolation, and optional temporary candidate preservation.
+
+Use the documented matching Vul4Py revision and apply this
+patch to a clean checkout. Do not reapply the patch to an
+already modified evaluator.
+
+The historical audit can operate from the public evidence.
+Full isolated execution additionally requires the Vul4Py
+benchmark and prepared workspaces with their dependencies.

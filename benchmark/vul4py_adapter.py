@@ -73,3 +73,120 @@ class Vul4PyAdapter:
             ),
             "verified_repair": A * F * S,
         }
+
+def prepare_evaluation(case_id, runs_root, workspaces_root, agent="student"):
+    """Prepara una evaluacion sobre directorios aislados."""
+    import config
+
+    config.validate_case(case_id)
+
+    if agent != "student":
+        raise ValueError("Agente no autorizado")
+
+    runs_root = Path(runs_root).resolve()
+    workspaces_root = Path(workspaces_root).resolve()
+    protected_root = config.VUL4PY_ROOT.resolve()
+    project_root = config.PROJECT_ROOT.resolve()
+
+    def inside(path, parent):
+        return path == parent or parent in path.parents
+
+    for directory in (runs_root, workspaces_root):
+        if inside(directory, project_root):
+            raise PermissionError(
+                "Los directorios de prueba deben estar fuera del proyecto"
+            )
+
+    if runs_root == workspaces_root:
+        raise ValueError("Los directorios deben ser diferentes")
+
+    case_workspace = workspaces_root / case_id
+    case_run = runs_root / agent / case_id
+
+    if not (case_workspace / "meta.json").is_file():
+        raise FileNotFoundError(case_workspace / "meta.json")
+
+    if not (case_workspace / "vulnerable").is_dir():
+        raise FileNotFoundError(case_workspace / "vulnerable")
+
+    if not (case_run / "patch.diff").is_file():
+        raise FileNotFoundError(case_run / "patch.diff")
+
+    if (case_run / "eval.json").exists():
+        raise FileExistsError(case_run / "eval.json")
+
+    evaluator = protected_root / "scripts" / "evaluate.py"
+
+    if not evaluator.is_file():
+        raise FileNotFoundError(evaluator)
+
+    return [
+        "python3",
+        str(evaluator),
+        "--agent",
+        agent,
+        "--vuln-id",
+        case_id,
+        "--workspaces",
+        str(workspaces_root),
+        "--strict-workspaces",
+        "--runs",
+        str(runs_root),
+    ]
+
+
+def execute_evaluation(case_id, runs_root, workspaces_root, keep_candidate=False):
+    """Ejecuta Vul4Py sobre espacios aislados."""
+    import subprocess
+    import sys
+
+    command = prepare_evaluation(
+        case_id,
+        runs_root,
+        workspaces_root
+    )
+
+    command[0] = sys.executable
+
+    if type(keep_candidate) is not bool:
+        raise ValueError("keep_candidate debe ser booleano")
+
+    if keep_candidate:
+        command.append("--keep-candidate")
+
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=1800,
+        check=False
+    )
+
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "Vul4Py fallo durante la ejecucion: "
+            + completed.stderr[-2000:]
+        )
+
+    eval_path = (
+        Path(runs_root).resolve()
+        / "student"
+        / case_id
+        / "eval.json"
+    )
+
+    if not eval_path.is_file():
+        raise RuntimeError(
+            "Vul4Py termino sin generar eval.json"
+        )
+
+    with eval_path.open(encoding="utf-8") as file:
+        evaluation = json.load(file)
+
+    if evaluation.get("vuln_id") != case_id:
+        raise ValueError("Identificador de evaluacion incorrecto")
+
+    if type(evaluation.get("apply_ok")) is not bool:
+        raise ValueError("Estado de aplicacion invalido")
+
+    return evaluation
